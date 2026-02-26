@@ -3,42 +3,41 @@ name: Postman CI
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *" # every 6 hours (adjust if you like)
+    - cron: "0 6,22 * * *" # Runs twice daily
 
 jobs:
-  postman-tests:
+  newman-run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Ensure Node.js is available
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Install Newman
-        run: npm install -g newman
-
-      - name: Run Newman tests
-        continue-on-error: true
+      # THIS IS THE KEY FIX: Install the library your script requires
+      - name: Install Dependencies
         run: |
-          newman run postman/CHOPLIFE_DEV.postman_collection.json \
+          npm install newman
+          npm install dotenv
+
+      - name: Run Postman collection
+        # We use continue-on-error so the Slack step runs even if tests fail
+        continue-on-error: true 
+        run: |
+          npx newman run postman/CHOPLIFE_DEV.postman_collection.json \
             -e postman/CHOPLIFE_DEV.postman_environment.json \
             --reporters cli,json \
-            --reporter-json-export newman-report.json
-
-      - name: Upload Newman report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: newman-report
-          path: newman-report.json
+            --reporter-json-export result.json \
+            --verbose
 
       - name: Send Slack report
+        # always() ensures this runs even if the previous 'Run' step failed
         if: always()
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          node send-slack.js
+        run: node slack-report.js
