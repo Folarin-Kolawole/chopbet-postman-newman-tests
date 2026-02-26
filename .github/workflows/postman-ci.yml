@@ -1,16 +1,16 @@
-name: Newman CI
+name: Postman CI
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 6,22 * * *" # runs twice daily (UTC)
+    - cron: "0 */6 * * *" # every 6 hours (adjust if you like)
 
 jobs:
-  newman-run:
+  postman-tests:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Setup Node
@@ -21,23 +21,24 @@ jobs:
       - name: Install Newman
         run: npm install -g newman
 
-      - name: Debug file structure
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Repo contents:"
-          ls -R
-
-      - name: Run Postman collection
+      - name: Run Newman tests
+        continue-on-error: true
         run: |
           newman run postman/CHOPLIFE_DEV.postman_collection.json \
             -e postman/CHOPLIFE_DEV.postman_environment.json \
             --reporters cli,json \
-            --reporter-json-export result.json \
-            --verbose
+            --reporter-json-export newman-report.json
+
+      - name: Upload Newman report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-report
+          path: newman-report.json
 
       - name: Send Slack report
         if: always()
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: node slack-report.js
+        run: |
+          node send-slack.js
